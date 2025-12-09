@@ -4,8 +4,23 @@
 # Starts both backend API and frontend web interface
 # For individual services, use start_backend.sh or start_frontend.sh
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# Get the absolute path of the script
+if [ -n "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+else
+    SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
+fi
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Verify we're in the correct directory
+if [ ! -d "$PROJECT_ROOT/api" ]; then
+    echo "❌ Error: Cannot find api directory at $PROJECT_ROOT/api"
+    echo "   Current directory: $(pwd)"
+    echo "   Script directory: $SCRIPT_DIR"
+    echo "   Project root: $PROJECT_ROOT"
+    exit 1
+fi
+
 cd "$PROJECT_ROOT"
 
 echo "=========================================="
@@ -54,7 +69,13 @@ RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     echo "Starting backend on port $BACKEND_PORT (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
     
-    cd "$PROJECT_ROOT/api"
+    if ! cd "$PROJECT_ROOT/api" 2>/dev/null; then
+        echo "❌ Error: Cannot change to directory $PROJECT_ROOT/api"
+        echo "   Project root: $PROJECT_ROOT"
+        echo "   Current directory: $(pwd)"
+        exit 1
+    fi
+    
     python server.py $BACKEND_PORT > "$LOG_FILE" 2>&1 &
     BACKEND_PID=$!
     cd "$PROJECT_ROOT"
@@ -113,6 +134,19 @@ echo ""
 # Start frontend
 echo "Starting frontend..."
 cd "$PROJECT_ROOT/frontend"
+
+# Check if node_modules exists, if not install dependencies
+if [ ! -d "node_modules" ]; then
+    echo "📦 Frontend dependencies not found. Installing..."
+    npm install
+    if [ $? -ne 0 ]; then
+        echo "❌ Failed to install frontend dependencies"
+        exit 1
+    fi
+    echo "✓ Frontend dependencies installed"
+    echo ""
+fi
+
 npm run dev
 
 # Cleanup on exit
